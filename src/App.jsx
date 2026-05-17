@@ -28,7 +28,7 @@ const DEFAULT_FAMILIES = [
   { id: "fam_softs", name: "Softs & Eaux", icon: "💧", sendToKitchen: false, color: "#5dade2" },
   { id: "fam_chauds", name: "Boissons Chaudes", icon: "☕", sendToKitchen: false, color: "#a04000" },
   { id: "fam_alcools", name: "Whiskys & Spirits", icon: "🥃", sendToKitchen: false, color: "#784212" },
-  { id: "fam_garnitures", name: "Garnitures", icon: "🍟", sendToKitchen: false, color: "#7f8c8d" },
+  { id: "fam_garnitures", name: "Garnitures", icon: "🍟", sendToKitchen: true, color: "#7f8c8d" },
 ];
 
 const DEFAULT_MENU = [
@@ -164,7 +164,7 @@ function printTicket(html) {
 function htmlKitchen(ticket) {
   const t = new Date(ticket.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   const rows = ticket.items.map(i =>
-    `<tr><td class="b" style="width:28px">${i.qty}×</td><td>${i.name}${i.options?.cuisson ? `<br><span class="small">🔥 ${i.options.cuisson}</span>` : ""}${i.options?.sans?.length ? `<br><span class="small">⚠ Sans: ${i.options.sans.join(", ")}</span>` : ""}${i.options?.note ? `<br><span class="small">📝 ${i.options.note}</span>` : ""}</td></tr>`
+    `<tr><td class="b" style="width:28px">${i.qty}×</td><td>${i.name}${i.options?.cuisson ? `<br><span class="small">🔥 ${i.options.cuisson}</span>` : ""}${i.options?.accompagnement ? `<br><span class="small">🍽 Accomp. offert: ${i.options.accompagnement}</span>` : ""}${i.options?.sans?.length ? `<br><span class="small">⚠ Sans: ${i.options.sans.join(", ")}</span>` : ""}${i.options?.note ? `<br><span class="small">📝 ${i.options.note}</span>` : ""}</td></tr>`
   ).join("");
   return `<h2>${ticket.isComplement ? "➕ COMPLÉMENT CUISINE" : "🍽 BON DE CUISINE"}</h2>
 <div class="c big">${ticket.tableName}</div>
@@ -261,7 +261,10 @@ const useApp = () => useContext(Ctx);
 function AppProvider({ children }) {
   const [session, setSession] = useState(() => S.get("session"));
   const [staff, setStaffState] = useState(() => S.get("staff", DEFAULT_STAFF));
-  const [families, setFamiliesState] = useState(() => S.get("families", DEFAULT_FAMILIES));
+  const [families, setFamiliesState] = useState(() => {
+    const loaded = S.get("families", DEFAULT_FAMILIES);
+    return loaded.map(f => f.id === "fam_garnitures" ? { ...f, sendToKitchen: true } : f);
+  });
   const [menuItems, setMenuItemsState] = useState(() => S.get("menu", DEFAULT_MENU));
   const [tables, setTablesState] = useState(() => S.get("tables", INITIAL_TABLES));
   const [orders, setOrdersState] = useState(() => S.get("orders", []));
@@ -288,7 +291,7 @@ function AppProvider({ children }) {
   useEffect(() => {
     const sync = () => {
       setStaffState(S.get("staff", DEFAULT_STAFF));
-      setFamiliesState(S.get("families", DEFAULT_FAMILIES));
+      setFamiliesState(S.get("families", DEFAULT_FAMILIES).map(f => f.id === "fam_garnitures" ? { ...f, sendToKitchen: true } : f));
       setMenuItemsState(S.get("menu", DEFAULT_MENU));
       setTablesState(S.get("tables", INITIAL_TABLES));
       setOrdersState(S.get("orders", []));
@@ -1221,6 +1224,9 @@ const orderTot = (items, menu) => items.reduce((s, i) => { const mi = menu.find(
 const COLORS = ["#e67e22","#e74c3c","#9b59b6","#27ae60","#3498db","#1abc9c","#f39c12","#d35400","#8e44ad","#16a085","#2c3e50","#7f8c8d"];
 const CUISSONS = ["Bleu","Saignant","À point","Bien cuit"];
 const SANS_OPT = ["Oignon","Ail","Piment","Sel","Sauce","Piment fort","Citron","Herbes","Fromage","Crème"];
+const FAMILIES_WITH_ACCOMP = new Set(["fam_grillades", "fam_yassa", "fam_mafe", "fam_thiep", "fam_centre", "fam_voyages"]);
+const FAMILIES_WITH_CUISSON = new Set(["fam_grillades"]);
+const itemNeedsOptionsModal = (item) => FAMILIES_WITH_ACCOMP.has(item.familyId) || FAMILIES_WITH_CUISSON.has(item.familyId);
 
 // ═══════════════════════════════════════════════════════════════════
 // LOGIN
@@ -1978,19 +1984,38 @@ function TablePlan({ onSelectTable }) {
 // ITEM OPTIONS
 // ═══════════════════════════════════════════════════════════════════
 function ItemOptionsModal({ item, onConfirm, onClose }) {
+  const { menuItems } = useApp();
   const [cuisson, setCuisson] = useState("");
+  const [accompagnement, setAccompagnement] = useState("");
   const [sans, setSans] = useState([]);
   const [note, setNote] = useState("");
+  const showCuisson = FAMILIES_WITH_CUISSON.has(item.familyId);
+  const showAccomp = FAMILIES_WITH_ACCOMP.has(item.familyId);
+  const accompChoices = menuItems.filter(m => m.familyId === "fam_garnitures");
   return (
     <div className="overlay" onClick={onClose}>
       <div className="omods" onClick={e => e.stopPropagation()}>
         <div className="omtitle">{item.name}</div>
-        <div className="orow"><div className="olbl">Cuisson</div><div className="chips">{CUISSONS.map(c => <span key={c} className={`chip${cuisson === c ? " on" : ""}`} onClick={() => setCuisson(c === cuisson ? "" : c)}>{c}</span>)}</div></div>
+        {showCuisson && (
+          <div className="orow"><div className="olbl">Cuisson</div><div className="chips">{CUISSONS.map(c => <span key={c} className={`chip${cuisson === c ? " on" : ""}`} onClick={() => setCuisson(c === cuisson ? "" : c)}>{c}</span>)}</div></div>
+        )}
+        {showAccomp && (
+          <div className="orow">
+            <div className="olbl">Accompagnement offert</div>
+            <div className="chips">
+              {accompChoices.map(a => (
+                <span key={a.id} className={`chip${accompagnement === a.name ? " on" : ""}`} onClick={() => setAccompagnement(accompagnement === a.name ? "" : a.name)}>
+                  {a.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="orow"><div className="olbl">Sans...</div><div className="chips">{SANS_OPT.map(i => <span key={i} className={`chip${sans.includes(i) ? " on" : ""}`} onClick={() => setSans(s => s.includes(i) ? s.filter(x => x !== i) : [...s, i])}>{i}</span>)}</div></div>
         <div className="orow"><div className="olbl">Note</div><input className="oinp" placeholder="Instructions..." value={note} onChange={e => setNote(e.target.value)} /></div>
         <div style={{ display: "flex", gap: 9, marginTop: 8 }}>
           <button className="btn btn-sec" style={{ flex: 1 }} onClick={onClose}>Annuler</button>
-          <button className="btn btn-acc" style={{ flex: 1 }} onClick={() => onConfirm({ cuisson, sans, note })}>Ajouter</button>
+          <button className="btn btn-acc" style={{ flex: 1 }} onClick={() => onConfirm({ cuisson, accompagnement, sans, note })}>Ajouter</button>
         </div>
       </div>
     </div>
@@ -2013,7 +2038,7 @@ function BillModal({ table, order, onClose }) {
             {(order?.items || []).map((item, i) => {
               const mi = menuItems.find(m => m.id === item.menuId);
               if (!mi) return null;
-              return <div key={i} className="bi"><span className="blbl">{item.qty}× {mi.name}{item.options?.cuisson ? ` (${item.options.cuisson})` : ""}</span><span className="bval">{(mi.price * item.qty).toFixed(2)} €</span></div>;
+              return <div key={i} className="bi"><span className="blbl">{item.qty}× {mi.name}{item.options?.cuisson ? ` (${item.options.cuisson})` : ""}{item.options?.accompagnement ? ` — Accomp. offert: ${item.options.accompagnement}` : ""}</span><span className="bval">{(mi.price * item.qty).toFixed(2)} €</span></div>;
             })}
             <div className="bi sub"><span className="blbl">Total HT</span><span className="bval">{ht.toFixed(2)} €</span></div>
             <div className="bi"><span className="blbl">TVA 10%</span><span className="bval">{tva.toFixed(2)} €</span></div>
@@ -2066,7 +2091,7 @@ function OrderScreen({ tableId }) {
       const qty = inCartQty(mi.id);
       if (qty >= mi.stock) { showStockAlert(mi, mi.stock); return; }
     }
-    const hasOpts = opts.cuisson || opts.note || (opts.sans?.length > 0);
+    const hasOpts = opts.cuisson || opts.accompagnement || opts.note || (opts.sans?.length > 0);
     const existing = !hasOpts && items.find(i => i.menuId === mi.id);
     if (existing) updateOrder(order.id, { items: items.map(i => i === existing ? { ...i, qty: i.qty + 1 } : i) });
     else updateOrder(order.id, { items: [...items, { menuId: mi.id, qty: 1, options: opts }] });
@@ -2182,7 +2207,11 @@ function OrderScreen({ tableId }) {
                   onMouseUp={endLong}
                   onTouchStart={() => !blocked && startLong(item)}
                   onTouchEnd={endLong}
-                  onClick={() => !blocked && addItem(item)}>
+                  onClick={() => {
+                    if (blocked) return;
+                    if (itemNeedsOptionsModal(item)) setLongItem(item);
+                    else addItem(item);
+                  }}>
                   {/* Zone photo */}
                   <div className="mitem-photo" style={{ borderBottom: `1px solid ${famColor}22` }}>
                     {item.photo
@@ -2238,6 +2267,7 @@ function OrderScreen({ tableId }) {
                       <div style={{ flex:1, minWidth:0 }}>
                         <div className="ciname">{mi.name}</div>
                         {item.options?.cuisson && <div className="ciopts">🔥 {item.options.cuisson}</div>}
+                        {item.options?.accompagnement && <div className="ciopts" style={{ color:"var(--green)" }}>🍽 Accomp. offert: {item.options.accompagnement}</div>}
                         {item.options?.sans?.length > 0 && <div className="ciopts">⚠ Sans: {item.options.sans.join(", ")}</div>}
                         {item.options?.note && <div className="ciopts" style={{ color:"var(--yellow)" }}>📝 {item.options.note}</div>}
                         {goesToKit && allSent && <div className="ciopts" style={{ color:"var(--green)" }}>✅ Envoyé</div>}
@@ -2325,6 +2355,7 @@ function Kitchen() {
               <div style={{ flex: 1 }}>
                 <span>{item.name}</span>
                 {item.options?.cuisson && <span style={{ color: "var(--acc)", fontSize: 10 }}> — {item.options.cuisson}</span>}
+                {item.options?.accompagnement && <div style={{ fontSize: 10, color: "var(--green)" }}>🍽 Accomp. offert: {item.options.accompagnement}</div>}
                 {item.options?.sans?.length > 0 && <div style={{ fontSize: 10, color: "var(--yellow)" }}>⚠ Sans: {item.options.sans.join(", ")}</div>}
                 {item.options?.note && <div style={{ fontSize: 10, color: "var(--yellow)" }}>📝 {item.options.note}</div>}
                 {/* Cancel only in pending col and only if cuisine or admin */}
