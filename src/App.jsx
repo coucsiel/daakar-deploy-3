@@ -494,8 +494,6 @@ function AppProvider({ children }) {
 
     // Décrémenter le stock sur les articles effectivement envoyés
     decrementStock(kitItems);
-
-    printTicket(htmlKitchen(ticket));
     return true;
   }, [decrementStock]);
 
@@ -521,7 +519,6 @@ function AppProvider({ children }) {
     if (!starterItems.length) return;
     setKitchen(cur.map(t => t.id === ticketId ? { ...t, startersReady: true, startersReadyAt: Date.now() } : t));
     pushNotif({ type: "starters_ready", msg: `🥗 Entrées prêtes: ${ticket.tableName}` });
-    printTicket(htmlStartersReady({ ...ticket, items: starterItems }));
   }, [pushNotif]);
 
   // ── KITCHEN TICKET ACTIONS ──
@@ -541,7 +538,6 @@ function AppProvider({ children }) {
     if (status === "ready") {
       setTables(S.get("tables", INITIAL_TABLES).map(t => t.orderId === ticket.orderId ? { ...t, status: "prêt" } : t));
       pushNotif({ type: "ready", msg: `✅ Prêt à servir: ${ticket.tableName}` });
-      printTicket(htmlReady(ticket));
     }
     if (status === "preparing") {
       pushNotif({ type: "preparing", msg: `🔥 En préparation: ${ticket.tableName}` });
@@ -554,7 +550,6 @@ function AppProvider({ children }) {
     if (!table) return;
     const curOrders = S.get("orders", []);
     const order = curOrders.find(o => o.id === table.orderId);
-    if (order) printTicket(htmlBill(table, { ...order, payment: paymentMethod }, S.get("menu", DEFAULT_MENU), session?.name || ""));
     setOrders(curOrders.map(o => o.id === table.orderId ? { ...o, status: "paid", payment: paymentMethod, paidAt: Date.now() } : o));
     setTables(curTables.map(t => t.id === tableId ? { ...t, status: "libre", serverId: null, openedAt: null, orderId: null, covers: 0 } : t));
   }, [session]);
@@ -613,19 +608,35 @@ const CSS = `
 
 html[data-theme="beige"]{
   --bg:#f4efe6;--bg1:#ebe4d8;--bg2:#e2d9cc;--bg3:#d8cec0;--bg4:#cdc2b4;
-  --glass:rgba(44,36,25,.05);--glass2:rgba(44,36,25,.08);--glass3:rgba(44,36,25,.12);
-  --border:rgba(44,36,25,.1);--border2:rgba(44,36,25,.16);--border3:rgba(44,36,25,.22);
-  --acc:#c45c26;--acc2:#a84320;--acc3:#d47840;
+  --glass:rgba(44,36,25,.07);--glass2:rgba(44,36,25,.11);--glass3:rgba(44,36,25,.16);
+  --border:rgba(44,36,25,.14);--border2:rgba(44,36,25,.22);--border3:rgba(44,36,25,.3);
+  --acc:#b84e1a;--acc2:#963a12;--acc3:#d47840;
   --acc-g:linear-gradient(135deg,#c45c26,#a84320);
-  --green:#1a8f5c;--green-d:rgba(26,143,92,.12);
-  --yellow:#b8860b;--yellow-d:rgba(184,134,11,.14);
-  --red:#c0392b;--red-d:rgba(192,57,43,.12);
-  --blue:#2874a6;--blue-d:rgba(40,116,166,.12);
-  --purple:#6c3483;
-  --t1:#2c2419;--t2:rgba(44,36,25,.72);--t3:rgba(44,36,25,.45);--t4:rgba(44,36,25,.28);
-  --shadow:0 4px 24px rgba(44,36,25,.12);
-  --shadow-acc:0 8px 32px rgba(196,92,38,.2);
+  --acc-d:rgba(196,92,38,.14);
+  --green:#157a4e;--green-d:rgba(21,122,78,.16);
+  --yellow:#9a6f08;--yellow-d:rgba(154,111,8,.18);
+  --red:#b33025;--red-d:rgba(179,48,37,.14);
+  --blue:#1f5f8b;--blue-d:rgba(31,95,139,.14);
+  --purple:#5b2d70;
+  --t1:#1f1812;--t2:rgba(31,24,18,.88);--t3:rgba(31,24,18,.65);--t4:rgba(31,24,18,.45);
+  --shadow:0 4px 24px rgba(44,36,25,.14);
+  --shadow-acc:0 8px 32px rgba(196,92,38,.22);
 }
+html[data-theme="beige"] .khdr,html[data-theme="beige"] .kro-banner,html[data-theme="beige"] .kitbar,html[data-theme="beige"] .ocats{background:rgba(244,239,230,.96)!important;}
+html[data-theme="beige"] .cart{background:rgba(244,239,230,.98)!important;}
+html[data-theme="beige"] .modal{background:rgba(252,248,242,.98);border-color:var(--border2);}
+html[data-theme="beige"] .catpill.on{border-color:var(--border3);color:var(--t1);}
+html[data-theme="beige"] .hbtn{color:var(--t1);}
+html[data-theme="beige"] .hbtn.on{background:var(--glass3);color:var(--acc);}
+html[data-theme="beige"] .profile-role,html[data-theme="beige"] .stat-lbl,html[data-theme="beige"] .sec-badge,html[data-theme="beige"] .logo-sub,html[data-theme="beige"] .cempty span{color:var(--t3)!important;}
+html[data-theme="beige"] .ciname,html[data-theme="beige"] .iname,html[data-theme="beige"] .mcatttl{color:var(--t1);}
+html[data-theme="beige"] .ciopts,html[data-theme="beige"] .idesc,html[data-theme="beige"] .ttmr{color:var(--t3);}
+html[data-theme="beige"] .cp .kctitle{color:var(--t2);}
+html[data-theme="beige"] .kitchen-display .ktcompl{background:var(--acc-d);border-color:rgba(184,78,26,.45);}
+html[data-theme="beige"] .toprank.s{color:var(--t3);}
+html[data-theme="beige"] .atable td{border-bottom-color:rgba(44,36,25,.1);}
+html[data-theme="beige"] .nav-item.fab .nav-lbl{color:var(--t1);}
+html[data-theme="beige"] .login .lcard{background:rgba(252,248,242,.95);border-color:var(--border2);}
 html[data-theme="beige"] .app::before{
   background:
     radial-gradient(ellipse 500px 400px at -10% -10%, rgba(196,92,38,.08) 0%, transparent 60%),
@@ -919,6 +930,31 @@ html,body,#root{height:100%;background:var(--bg);-webkit-tap-highlight-color:tra
 .kbt-srv:hover{background:rgba(79,195,247,.22);}
 .alert-band{background:linear-gradient(90deg,var(--red),#ff6b6b);color:white;text-align:center;font-size:11px;font-weight:700;padding:6px;letter-spacing:.8px;animation:alertBlink 1s infinite;flex-shrink:0;}
 @keyframes alertBlink{0%,100%{opacity:1;}50%{opacity:.75;}}
+
+.kitchen-page{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.app > .kitchen.kitchen-display,.kitchen-page > .kitchen{flex:1;min-height:0;display:flex;flex-direction:column;}
+.kitchen-display{touch-action:pan-y;-webkit-overflow-scrolling:touch;}
+.kitchen-display .kcols{flex:1;min-height:0;overflow:hidden;gap:14px;padding:12px 14px 18px;align-items:stretch;}
+.kitchen-display .kcol{min-height:0;max-height:100%;display:flex;flex-direction:column;}
+.kitchen-display .kticks{
+  flex:1;min-height:0;max-height:100%;
+  overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  scroll-behavior:smooth;
+  padding:10px 8px 20px;gap:10px;
+  touch-action:pan-y;
+}
+.kitchen-display .kticks::-webkit-scrollbar{width:8px;}
+.kitchen-display .kticks::-webkit-scrollbar-track{background:transparent;}
+.kitchen-display .kticks::-webkit-scrollbar-thumb{background:var(--border2);border-radius:8px;border:2px solid transparent;background-clip:padding-box;}
+.kitchen-display .kticks::-webkit-scrollbar-thumb:hover{background:var(--border3);}
+.kitchen-display .ktick{transform:translateZ(0);will-change:transform,opacity;}
+@media(max-width:900px){
+  .kitchen-display .kcols{grid-template-columns:1fr;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding-bottom:24px;}
+  .kitchen-display .kcol{max-height:none;min-height:min(55vh,520px);}
+  .kitchen-display .kticks{max-height:min(48vh,480px);}
+}
 .kitchen-display .ktitle{font-size:26px;}
 .kitchen-display .khdr-sub{font-size:14px;color:var(--t2);}
 .kitchen-display .khdr-stats{margin-left:auto;display:flex;gap:14px;font-size:15px;font-weight:600;flex-wrap:wrap;}
@@ -1816,8 +1852,8 @@ function DeliveryModal({ onClose }) {
   };
 
   const GL = {
-    glass:   "rgba(255,255,255,.05)",
-    border:  "1px solid rgba(255,255,255,.09)",
+    glass:   "var(--glass2)",
+    border:  "1px solid var(--border)",
     rad:     "var(--Rlg)",
     radSm:   "var(--Rsm)",
   };
@@ -2163,7 +2199,6 @@ function BillModal({ table, order, onClose }) {
             <div className="bi"><span className="blbl">TVA 10%</span><span className="bval">{tva.toFixed(2)} €</span></div>
             <div className="bi tot"><span>TOTAL TTC</span><span>{(ht + tva).toFixed(2)} €</span></div>
           </div>
-          <div style={{ fontSize: 11, color: "var(--t3)", textAlign: "center", marginBottom: 10 }}>Impression automatique à la clôture</div>
           <div className="paybts">
             {[["💳","Carte"],["💵","Espèces"],["📱","Lydia"],["🔄","Mixte"]].map(([ico, label]) => (
               <button key={label} className="paybt" onClick={() => { closeTable(table.id, label); onClose(); }}>
@@ -2517,7 +2552,7 @@ function Kitchen() {
       {veryLate && <div className="alert-band">⚠ ALERTE — Commandes en attente depuis plus de 25 min !</div>}
       <div className="khdr">
         <div className="ktitle">🍳 CUISINE</div>
-        <div className="khdr-sub">Temps réel · Impression automatique</div>
+        <div className="khdr-sub">Temps réel · Mise à jour instantanée</div>
         <div className="khdr-stats">
           <span style={{ color: "var(--yellow)" }}>⏳ {pending.length} en attente</span>
           <span style={{ color: "var(--acc)" }}>🔥 {preparing.length} en prépa</span>
@@ -3046,13 +3081,13 @@ function AppInner() {
       {session.role === "serveur" && effectivePage === "stats" && <Stats />}
 
       {/* ── CUISINE ── */}
-      {session.role === "cuisine" && (effectivePage === "kitchen" || effectivePage === "tables") && <Kitchen />}
+      {session.role === "cuisine" && (effectivePage === "kitchen" || effectivePage === "tables") && <div className="kitchen-page"><Kitchen /></div>}
       {session.role === "cuisine" && effectivePage === "stats" && <Stats />}
 
       {/* ── ADMIN ── */}
       {session.role === "admin" && effectivePage === "tables" && !activeTable && <TablePlan onSelectTable={setActiveTable} />}
       {session.role === "admin" && effectivePage === "tables" && activeTable && <OrderScreen tableId={activeTable} />}
-      {session.role === "admin" && effectivePage === "kitchen" && <Kitchen />}
+      {session.role === "admin" && effectivePage === "kitchen" && <div className="kitchen-page"><Kitchen /></div>}
       {session.role === "admin" && effectivePage === "stats" && <Stats />}
       {session.role === "admin" && effectivePage === "admin" && <AdminPanel />}
 
