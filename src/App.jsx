@@ -191,6 +191,21 @@ function htmlReady(ticket) {
 <div class="c b" style="font-size:16px">⬆ SERVICE EN SALLE ⬆</div>`;
 }
 
+function htmlStartersReady(ticket) {
+  const t = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const rows = ticket.items.map(i =>
+    `<tr><td class="b" style="width:28px">${i.qty}×</td><td>${i.name}${i.options?.sans?.length ? `<br><span class="small">⚠ Sans: ${i.options.sans.join(", ")}</span>` : ""}${i.options?.note ? `<br><span class="small">📝 ${i.options.note}</span>` : ""}</td></tr>`
+  ).join("");
+  return `<h2>🥗 ENTRÉES / SALADES PRÊTES</h2>
+<div class="c big">${ticket.tableName}</div>
+<div class="c">Serveur: <b>${ticket.serverName}</b></div>
+<div class="c">${t}</div>
+<div class="line"></div>
+<table>${rows}</table>
+<div class="line"></div>
+<div class="c b" style="font-size:16px">⬆ À SERVIR EN SALLE ⬆</div>`;
+}
+
 function htmlBill(table, order, menuItems, staffName) {
   const now = new Date().toLocaleString("fr-FR");
   const rows = order.items.map(i => {
@@ -274,6 +289,16 @@ function AppProvider({ children }) {
   const [delivery, setDelivState] = useState(() => S.get("delivery", []));
   const [notifications, setNotifs] = useState([]);
   const [page, setPage] = useState("tables");
+  const [theme, setThemeState] = useState(() => (S.get("theme") === "beige" ? "beige" : "dark"));
+  const setTheme = useCallback((t) => {
+    const v = t === "beige" ? "beige" : "dark";
+    setThemeState(v);
+    S.set("theme", v);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   // ── save helpers ──
   const sv = useCallback((key, setter, data) => { setter(data); S.set(key, data); }, []);
@@ -426,7 +451,7 @@ function AppProvider({ children }) {
         const qtySent     = alreadySent[item.menuId] || 0;
         const deltaQty    = item.qty - qtySent;       // complément à envoyer
         return deltaQty > 0
-          ? { ...item, qty: deltaQty, name: mi?.name || "?" }
+          ? { ...item, qty: deltaQty, name: mi?.name || "?", course: kitItemCourse(mi?.familyId) }
           : null;
       })
       .filter(Boolean); // ne garder que les articles avec un delta > 0
@@ -447,6 +472,7 @@ function AppProvider({ children }) {
       notes:      order.notes,
       createdAt:  Date.now(),
       isComplement: Object.keys(alreadySent).length > 0, // 2e envoi ou plus
+      startersReady: false,
     };
 
     setKitchen([...S.get("kitchen", []), ticket]);
@@ -485,6 +511,18 @@ function AppProvider({ children }) {
     pushNotif({ type: "cancel", msg: `✕ Annulation: ${ticket.tableName}` });
     return true;
   }, [incrementStock, pushNotif]);
+
+  const markStartersReady = useCallback((ticketId) => {
+    const cur = S.get("kitchen", []);
+    const ticket = cur.find(t => t.id === ticketId);
+    if (!ticket || ticket.startersReady) return;
+    const curMenu = S.get("menu", DEFAULT_MENU);
+    const starterItems = ticket.items.filter(i => resolveKitCourse(i, curMenu) === "starter");
+    if (!starterItems.length) return;
+    setKitchen(cur.map(t => t.id === ticketId ? { ...t, startersReady: true, startersReadyAt: Date.now() } : t));
+    pushNotif({ type: "starters_ready", msg: `🥗 Entrées prêtes: ${ticket.tableName}` });
+    printTicket(htmlStartersReady({ ...ticket, items: starterItems }));
+  }, [pushNotif]);
 
   // ── KITCHEN TICKET ACTIONS ──
   // role=cuisine only actions: pending→preparing, preparing→ready, ready→served(delete)
@@ -534,12 +572,13 @@ function AppProvider({ children }) {
       staff, setStaff, families, setFamilies, menuItems, setMenuItems,
       tables, myTables, openTable, closeTable,
       orders, updateOrder, sendToKitchen, cancelKitchenItem,
-      kitchenTickets, updateTicket,
+      kitchenTickets, updateTicket, markStartersReady,
       availability, toggleAvail,
       clockLog, setClock,
       delivery, setDelivery,
       notifications, pushNotif,
       page, setPage,
+      theme, setTheme,
     }}>
       {children}
     </Ctx.Provider>
@@ -570,6 +609,28 @@ const CSS = `
   --font2:'Space Grotesk',system-ui,sans-serif;
   --shadow:0 4px 24px rgba(0,0,0,.4);
   --shadow-acc:0 8px 32px rgba(255,107,53,.25);
+}
+
+html[data-theme="beige"]{
+  --bg:#f4efe6;--bg1:#ebe4d8;--bg2:#e2d9cc;--bg3:#d8cec0;--bg4:#cdc2b4;
+  --glass:rgba(44,36,25,.05);--glass2:rgba(44,36,25,.08);--glass3:rgba(44,36,25,.12);
+  --border:rgba(44,36,25,.1);--border2:rgba(44,36,25,.16);--border3:rgba(44,36,25,.22);
+  --acc:#c45c26;--acc2:#a84320;--acc3:#d47840;
+  --acc-g:linear-gradient(135deg,#c45c26,#a84320);
+  --green:#1a8f5c;--green-d:rgba(26,143,92,.12);
+  --yellow:#b8860b;--yellow-d:rgba(184,134,11,.14);
+  --red:#c0392b;--red-d:rgba(192,57,43,.12);
+  --blue:#2874a6;--blue-d:rgba(40,116,166,.12);
+  --purple:#6c3483;
+  --t1:#2c2419;--t2:rgba(44,36,25,.72);--t3:rgba(44,36,25,.45);--t4:rgba(44,36,25,.28);
+  --shadow:0 4px 24px rgba(44,36,25,.12);
+  --shadow-acc:0 8px 32px rgba(196,92,38,.2);
+}
+html[data-theme="beige"] .app::before{
+  background:
+    radial-gradient(ellipse 500px 400px at -10% -10%, rgba(196,92,38,.08) 0%, transparent 60%),
+    radial-gradient(ellipse 400px 350px at 110% 110%, rgba(108,52,131,.08) 0%, transparent 60%),
+    radial-gradient(ellipse 300px 300px at 50% 50%, rgba(40,116,166,.04) 0%, transparent 60%);
 }
 
 html,body,#root{height:100%;background:var(--bg);-webkit-tap-highlight-color:transparent;}
@@ -858,6 +919,36 @@ html,body,#root{height:100%;background:var(--bg);-webkit-tap-highlight-color:tra
 .kbt-srv:hover{background:rgba(79,195,247,.22);}
 .alert-band{background:linear-gradient(90deg,var(--red),#ff6b6b);color:white;text-align:center;font-size:11px;font-weight:700;padding:6px;letter-spacing:.8px;animation:alertBlink 1s infinite;flex-shrink:0;}
 @keyframes alertBlink{0%,100%{opacity:1;}50%{opacity:.75;}}
+.kitchen-display .ktitle{font-size:26px;}
+.kitchen-display .khdr-sub{font-size:14px;color:var(--t2);}
+.kitchen-display .khdr-stats{margin-left:auto;display:flex;gap:14px;font-size:15px;font-weight:600;flex-wrap:wrap;}
+.kitchen-display .kctitle{font-size:15px;}
+.kitchen-display .kccnt{width:28px;height:28px;font-size:14px;}
+.kitchen-display .kttbl{font-size:24px;}
+.kitchen-display .ktsrv{font-size:14px;color:var(--t2);margin-top:3px;}
+.kitchen-display .ktcompl{font-size:11px;font-weight:700;color:var(--acc);background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.35);border-radius:6px;padding:3px 8px;margin-top:5px;display:inline-block;letter-spacing:.4px;text-transform:uppercase;}
+.kitchen-display .kttm{font-size:14px;}
+.kitchen-display .ktlate{font-size:12px;color:var(--red);font-weight:700;}
+.kitchen-display .ktitem{font-size:17px;gap:8px;margin-bottom:4px;}
+.kitchen-display .ktitem-name{font-weight:600;font-size:17px;line-height:1.3;}
+.kitchen-display .ktitem-sub{font-size:14px;margin-top:3px;line-height:1.3;}
+.kitchen-display .ktitem-sub.green{color:var(--green);}
+.kitchen-display .ktitem-sub.warn{color:var(--yellow);}
+.kitchen-display .ktqty{font-size:22px;min-width:28px;}
+.kitchen-display .ktnote{font-size:14px;padding:8px 10px;}
+.kitchen-display .ktcancel{font-size:12px;padding:4px 8px;}
+.kitchen-display .kbt{font-size:16px;padding:12px 14px;margin-top:7px;}
+.kitchen-display .ktick{padding:14px;}
+.kitchen-display .alert-band{font-size:14px;padding:9px;}
+.kitchen-display .ktcourse{margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--border);}
+.kitchen-display .ktcourse.done{opacity:.72;}
+.kitchen-display .ktcourse-hdr{font-family:var(--font2);font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--t2);margin-bottom:6px;}
+.kbt-starters{background:rgba(26,143,92,.15);border:1px solid rgba(26,143,92,.35);color:var(--green);}
+.kbt-starters:hover{background:rgba(26,143,92,.25);}
+.theme-btn{font-size:18px;line-height:1;}
+.toast.starters_ready{border-color:rgba(26,143,92,.4);background:rgba(26,143,92,.12);color:var(--green);}
+.login-theme{position:absolute;top:16px;right:16px;z-index:5;}
+
 
 /* Kitchen read-only */
 .kro{flex:1;overflow:hidden;display:flex;flex-direction:column;}
@@ -1227,6 +1318,29 @@ const SANS_OPT = ["Oignon","Ail","Piment","Sel","Sauce","Piment fort","Citron","
 const FAMILIES_WITH_ACCOMP = new Set(["fam_grillades", "fam_yassa", "fam_mafe", "fam_thiep", "fam_centre", "fam_voyages"]);
 const FAMILIES_WITH_CUISSON = new Set(["fam_grillades"]);
 const itemNeedsOptionsModal = (item) => FAMILIES_WITH_ACCOMP.has(item.familyId) || FAMILIES_WITH_CUISSON.has(item.familyId);
+const STARTER_FAMILIES = new Set(["fam_entrees", "fam_salades"]);
+const kitItemCourse = (familyId) => STARTER_FAMILIES.has(familyId) ? "starter" : "main";
+const resolveKitCourse = (item, menuItems) => item.course || kitItemCourse(menuItems.find(m => m.id === item.menuId)?.familyId);
+
+
+// ═══════════════════════════════════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════════════════════════════════
+function ThemeToggle({ className = "" }) {
+  const { theme, setTheme } = useApp();
+  const isBeige = theme === "beige";
+  return (
+    <button
+      type="button"
+      className={`icon-btn theme-btn ${className}`.trim()}
+      onClick={() => setTheme(isBeige ? "dark" : "beige")}
+      title={isBeige ? "Thème sombre" : "Thème beige"}
+      aria-label={isBeige ? "Passer au thème sombre" : "Passer au thème beige"}
+    >
+      {isBeige ? "🌙" : "🟤"}
+    </button>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // LOGIN
@@ -1255,6 +1369,7 @@ function Login() {
 
   return (
     <div className="login">
+      <ThemeToggle className="login-theme" />
       <div className="lcard">
         <div className="logo">🍽 LE DAAKAR</div>
         <div className="logo-sub">POS Pro v3 — Identification</div>
@@ -1369,6 +1484,7 @@ function Header({ activeTable, onBack, onLogoutRequest }) {
         </button>
       )}
 
+      <ThemeToggle />
       {/* Logout button — always */}
       <button className="hbtn red" onClick={onLogoutRequest}>⏏ Fin</button>
     </div>
@@ -1681,14 +1797,17 @@ function DeliveryModal({ onClose }) {
       const mi  = curMenu.find(m => m.id === c.id);
       const fam = curFams.find(f => f.id === mi?.familyId);
       return fam?.sendToKitchen;
-    }).map(c => ({ menuId: c.id, qty: c.qty, name: c.nm }));
+    }).map(c => {
+      const mi = curMenu.find(m => m.id === c.id);
+      return { menuId: c.id, qty: c.qty, name: c.nm, course: kitItemCourse(mi?.familyId) };
+    });
 
     if (kitItems.length) {
       const label  = type === "uber" ? `🟢 Uber ${finalRef}` : `🛍️ Emporter ${finalRef}`;
       const ticket = {
         id: `kt_${Date.now()}`, orderId, tableId: null, tableName: label,
         serverId: session?.id, serverName: session?.name || "Serveur",
-        items: kitItems, status: "pending", notes: note, createdAt: Date.now(),
+        items: kitItems, status: "pending", notes: note, createdAt: Date.now(), startersReady: false,
       };
       const curK = S.get("kitchen", []);
       S.set("kitchen", [...curK, ticket]);
@@ -2316,7 +2435,7 @@ function OrderScreen({ tableId }) {
 }
 
 function Kitchen() {
-  const { kitchenTickets, updateTicket, cancelKitchenItem, session } = useApp();
+  const { kitchenTickets, updateTicket, cancelKitchenItem, markStartersReady, session, menuItems } = useApp();
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 10000); return () => clearInterval(t); }, []);
 
@@ -2325,49 +2444,67 @@ function Kitchen() {
   const ready = kitchenTickets.filter(t => t.status === "ready");
   const veryLate = pending.some(t => (now - t.createdAt) > 25 * 60000);
 
+  const renderKitItem = (ticket, item, i, col) => (
+    <div key={`${item.menuId}-${i}`} className="ktitem">
+      <span className="ktqty">{item.qty}×</span>
+      <div style={{ flex: 1 }}>
+        <span className="ktitem-name">{item.name}</span>
+        {item.options?.cuisson && <div className="ktitem-sub">🔥 {item.options.cuisson}</div>}
+        {item.options?.accompagnement && <div className="ktitem-sub green">🍽 Accomp. offert: {item.options.accompagnement}</div>}
+        {item.options?.sans?.length > 0 && <div className="ktitem-sub warn">⚠ Sans: {item.options.sans.join(", ")}</div>}
+        {item.options?.note && <div className="ktitem-sub warn">📝 {item.options.note}</div>}
+        {col === "pending" && (session?.role === "cuisine" || session?.role === "admin") && (
+          <span className="ktcancel" onClick={() => cancelKitchenItem(ticket.id, item.menuId)}>✕ Annuler</span>
+        )}
+      </div>
+    </div>
+  );
+
   const renderTicket = (ticket, col) => {
     const elapsed = now - ticket.createdAt;
     const elMin = Math.floor(elapsed / 60000);
     const isNew = elapsed < 90000;
     const isLate = elMin > 25;
     const isWarn = elMin > 15 && !isLate;
+    const starterItems = ticket.items.filter(i => resolveKitCourse(i, menuItems) === "starter");
+    const mainItems = ticket.items.filter(i => resolveKitCourse(i, menuItems) === "main");
+    const hasStarters = starterItems.length > 0;
+    const hasMains = mainItems.length > 0;
+    const showStartersBtn = hasStarters && !ticket.startersReady && (col === "pending" || col === "preparing");
+
     return (
       <div key={ticket.id} className={`ktick${isNew ? " newt" : ""}${isLate ? " verylate" : ""}`}>
         <div className="kthdr">
           <div>
             <div className="kttbl">{ticket.tableName}</div>
-            <div style={{ fontSize: 10, color: "var(--t2)", marginTop: 1 }}>👤 {ticket.serverName}</div>
-            {ticket.isComplement && (
-              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--acc)", background: "var(--acc-d)", border: "1px solid var(--acc)", borderRadius: 4, padding: "1px 6px", marginTop: 3, display: "inline-block", letterSpacing: ".5px", textTransform: "uppercase" }}>
-                ➕ Complément
-              </div>
-            )}
+            <div className="ktsrv">👤 {ticket.serverName}</div>
+            {ticket.isComplement && <div className="ktcompl">➕ Complément</div>}
+            {hasStarters && hasMains && ticket.startersReady && <div className="ktcompl" style={{ color: "var(--green)", borderColor: "var(--green)", background: "var(--green-d)" }}>🥗 Entrées servies</div>}
           </div>
           <div style={{ textAlign: "right" }}>
             <div className={`kttm${isLate ? " late" : isWarn ? " warn" : ""}`}>{fmtT(elapsed)}</div>
-            {isLate && <div style={{ fontSize: 9, color: "var(--red)", fontWeight: 700 }}>⚠ RETARD</div>}
+            {isLate && <div className="ktlate">⚠ RETARD</div>}
           </div>
         </div>
         <div className="ktitems">
-          {ticket.items.map((item, i) => (
-            <div key={i} className="ktitem">
-              <span className="ktqty">{item.qty}×</span>
-              <div style={{ flex: 1 }}>
-                <span>{item.name}</span>
-                {item.options?.cuisson && <span style={{ color: "var(--acc)", fontSize: 10 }}> — {item.options.cuisson}</span>}
-                {item.options?.accompagnement && <div style={{ fontSize: 10, color: "var(--green)" }}>🍽 Accomp. offert: {item.options.accompagnement}</div>}
-                {item.options?.sans?.length > 0 && <div style={{ fontSize: 10, color: "var(--yellow)" }}>⚠ Sans: {item.options.sans.join(", ")}</div>}
-                {item.options?.note && <div style={{ fontSize: 10, color: "var(--yellow)" }}>📝 {item.options.note}</div>}
-                {/* Cancel only in pending col and only if cuisine or admin */}
-                {col === "pending" && (session?.role === "cuisine" || session?.role === "admin") && (
-                  <span className="ktcancel" onClick={() => cancelKitchenItem(ticket.id, item.menuId)}>✕ Annuler</span>
-                )}
-              </div>
+          {hasStarters && (
+            <div className={`ktcourse${ticket.startersReady ? " done" : ""}`}>
+              <div className="ktcourse-hdr">🥗 Entrées & Salades {ticket.startersReady ? "✅" : ""}</div>
+              {starterItems.map((item, i) => renderKitItem(ticket, item, i, col))}
             </div>
-          ))}
+          )}
+          {hasMains && (
+            <div className="ktcourse">
+              <div className="ktcourse-hdr">🍽 Plats</div>
+              {mainItems.map((item, i) => renderKitItem(ticket, item, i, col))}
+            </div>
+          )}
+          {!hasStarters && !hasMains && ticket.items.map((item, i) => renderKitItem(ticket, item, i, col))}
         </div>
         {ticket.notes && <div className="ktnote">📝 {ticket.notes}</div>}
-        {/* Action buttons — cuisine only */}
+        {showStartersBtn && (
+          <button className="kbt kbt-starters" onClick={() => markStartersReady(ticket.id)}>✅ Entrées / Salades prêtes</button>
+        )}
         {col === "pending" && <button className="kbt kbt-prep" onClick={() => updateTicket(ticket.id, "preparing")}>▶ En préparation</button>}
         {col === "preparing" && <button className="kbt kbt-rdy" onClick={() => updateTicket(ticket.id, "ready")}>✓ Prêt à servir</button>}
         {col === "ready" && <button className="kbt kbt-srv" onClick={() => updateTicket(ticket.id, "served")}>🍽 SERVI — Supprimer</button>}
@@ -2376,12 +2513,12 @@ function Kitchen() {
   };
 
   return (
-    <div className="kitchen">
+    <div className="kitchen kitchen-display">
       {veryLate && <div className="alert-band">⚠ ALERTE — Commandes en attente depuis plus de 25 min !</div>}
       <div className="khdr">
         <div className="ktitle">🍳 CUISINE</div>
-        <div style={{ color: "var(--t2)", fontSize: 11 }}>Temps réel · Impression automatique</div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 10, fontSize: 11, flexWrap: "wrap" }}>
+        <div className="khdr-sub">Temps réel · Impression automatique</div>
+        <div className="khdr-stats">
           <span style={{ color: "var(--yellow)" }}>⏳ {pending.length} en attente</span>
           <span style={{ color: "var(--acc)" }}>🔥 {preparing.length} en prépa</span>
           <span style={{ color: "var(--green)" }}>✅ {ready.length} prêts</span>
@@ -2874,7 +3011,7 @@ function AppInner() {
   const [activeTable, setActiveTable]     = useState(null);
   const [showLogout,  setShowLogout]      = useState(false);
 
-  if (!session) return <Login />;
+  if (!session) return (<><style>{CSS}</style><Login /></>);
 
   const handleLogoutConfirm = () => {
     setShowLogout(false);
